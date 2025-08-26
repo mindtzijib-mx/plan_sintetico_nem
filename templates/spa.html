@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Programa Sintético NEM - SPA</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"
+    />
+    <link rel="stylesheet" href="{{ url_for('static', filename='spa.css') }}" />
+  </head>
+  <body>
+    <header class="container">
+      <nav>
+        <ul>
+          <li><strong>Programa Sintético NEM</strong></li>
+        </ul>
+        <ul>
+          <li>
+            <a href="#" data-page="inicio" class="nav-link active">Inicio</a>
+          </li>
+          <li><a href="#" data-page="resumen" class="nav-link">Resumen</a></li>
+          <li>
+            <a href="#" data-page="filtrar" class="nav-link">Filtrar PDAs</a>
+          </li>
+          <li>
+            <div class="search-container">
+              <input
+                id="search-input"
+                type="search"
+                placeholder="Buscar contenidos..."
+              />
+              <button id="search-btn" type="button">Buscar</button>
+            </div>
+          </li>
+          <li>
+            <select id="fase-selector" aria-label="Seleccionar fase">
+              <option value="3">Fase 3</option>
+              <option value="4">Fase 4</option>
+              <option value="5">Fase 5</option>
+            </select>
+          </li>
+        </ul>
+      </nav>
+    </header>
+
+    <main class="container">
+      <div id="loading" class="loading hidden">
+        <div class="spinner"></div>
+        <p>Cargando...</p>
+      </div>
+
+      <div id="error-container" class="error-container hidden">
+        <article class="error">
+          <header>Error</header>
+          <p id="error-message"></p>
+          <footer>
+            <button id="retry-btn" class="secondary">Reintentar</button>
+          </footer>
+        </article>
+      </div>
+
+      <div id="content-container">
+        <!-- El contenido dinámico se cargará aquí -->
+      </div>
+    </main>
+
+    <footer class="container">
+      <small> Single Page Application • Flask API • SQLite </small>
+    </footer>
+
+    <!-- Templates para contenido dinámico -->
+    <template id="inicio-template">
+      <div class="inicio-page">
+        <h1>Programa Sintético NEM</h1>
+        <p>
+          Explora los contenidos y Procesos de Desarrollo de Aprendizaje (PDAs)
+          del Programa Sintético de la Nueva Escuela Mexicana.
+        </p>
+
+        <!-- Sección de filtrado rápido -->
+        <section class="filtro-rapido-section">
+          <h2>🔍 Filtrado Rápido de PDAs</h2>
+          <div class="filtro-rapido-container">
+            <div class="filtro-rapido-header">
+              <p>Encuentra rápidamente los PDAs que necesitas:</p>
+            </div>
+
+            <div class="filtro-rapido-form">
+              <div class="filtro-rapido-row">
+                <div class="filtro-rapido-field">
+                  <label for="inicio-filtro-campo">Campo Formativo:</label>
+                  <select
+                    id="inicio-filtro-campo"
+                    aria-label="Seleccionar campo formativo"
+                  >
+                    <option value="">-- Selecciona un campo --</option>
+                  </select>
+                </div>
+
+                <div class="filtro-rapido-field">
+                  <label for="inicio-filtro-contenido"
+                    >Contenido (opcional):</label
+                  >
+                  <select
+                    id="inicio-filtro-contenido"
+                    aria-label="Seleccionar contenido"
+                    disabled
+                  >
+                    <option value="">-- Todos los contenidos --</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="filtro-rapido-actions">
+                <button id="inicio-aplicar-filtros" class="primary" disabled>
+                  🎯 Mostrar PDAs
+                </button>
+                <button id="inicio-limpiar-filtros" class="secondary outline">
+                  🗑️ Limpiar
+                </button>
+              </div>
+            </div>
+
+            <!-- Resultados del filtrado rápido -->
+            <div
+              id="inicio-pdas-resultados"
+              class="inicio-pdas-resultados hidden"
+            >
+              <h3>
+                📋 PDAs Encontrados (<span id="inicio-pdas-count">0</span>)
+              </h3>
+              <div id="inicio-pdas-lista" class="inicio-pdas-lista">
+                <!-- Los PDAs se mostrarán aquí -->
+              </div>
+              <div class="ver-mas-container">
+                <button id="inicio-ver-filtro-completo" class="secondary">
+                  Ver Filtrado Completo →
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <h2>📚 Explorar por Campos Formativos</h2>
+        <div id="campos-grid" class="campos-grid">
+          <!-- Los campos se cargarán dinámicamente -->
+        </div>
+      </div>
+    </template>
+
+    <template id="campo-card-template">
+      <article class="campo-card" data-campo-id="">
+        <header>
+          <h3 class="campo-nombre"></h3>
+        </header>
+        <p class="campo-descripcion"></p>
+        <footer>
+          <button class="campo-btn" data-campo-id="">Ver Contenidos</button>
+        </footer>
+      </article>
+    </template>
+
+    <template id="resumen-template">
+      <div class="resumen-page">
+        <h1>Resumen - Fase <span id="fase-numero"></span></h1>
+        <div id="resumen-stats" class="stats-grid">
+          <!-- Las estadísticas se cargarán dinámicamente -->
+        </div>
+      </div>
+    </template>
+
+    <template id="stat-card-template">
+      <article class="stat-card">
+        <header>
+          <h3 class="stat-campo"></h3>
+        </header>
+        <div class="stat-numbers">
+          <div class="stat-item">
+            <strong class="stat-contenidos">0</strong>
+            <small>Contenidos</small>
+          </div>
+          <div class="stat-item">
+            <strong class="stat-pdas">0</strong>
+            <small>PDAs</small>
+          </div>
+        </div>
+        <footer>
+          <button class="campo-btn" data-campo-id="">Ver Detalles</button>
+        </footer>
+      </article>
+    </template>
+
+    <template id="contenidos-template">
+      <div class="contenidos-page">
+        <header class="page-header">
+          <button id="back-btn" class="secondary outline">← Volver</button>
+          <h1 id="campo-titulo"></h1>
+        </header>
+        <div id="contenidos-list" class="contenidos-list">
+          <!-- Los contenidos se cargarán dinámicamente -->
+        </div>
+      </div>
+    </template>
+
+    <template id="contenido-item-template">
+      <article class="contenido-item" data-contenido-id="">
+        <header>
+          <h4>
+            <span class="contenido-numero"></span>.
+            <span class="contenido-titulo"></span>
+          </h4>
+        </header>
+        <footer>
+          <button class="contenido-btn" data-contenido-id="">Ver PDAs</button>
+        </footer>
+      </article>
+    </template>
+
+    <template id="detalle-template">
+      <div class="detalle-page">
+        <header class="page-header">
+          <button id="back-to-contenidos-btn" class="secondary outline">
+            ← Volver a Contenidos
+          </button>
+          <div>
+            <h1 id="detalle-titulo"></h1>
+            <p class="detalle-meta">
+              <span id="detalle-campo"></span> • Fase
+              <span id="detalle-fase"></span>
+            </p>
+          </div>
+        </header>
+
+        <h2>Procesos de Desarrollo de Aprendizaje (PDAs)</h2>
+        <div id="pdas-container" class="pdas-container">
+          <!-- Los PDAs se cargarán dinámicamente -->
+        </div>
+      </div>
+    </template>
+
+    <template id="pda-group-template">
+      <div class="pda-group">
+        <h3 class="pda-grado"></h3>
+        <div class="pdas-list">
+          <!-- Los PDAs del grado se cargarán aquí -->
+        </div>
+      </div>
+    </template>
+
+    <template id="pda-item-template">
+      <article class="pda-item">
+        <header>
+          <strong>PDA <span class="pda-numero"></span></strong>
+        </header>
+        <p class="pda-descripcion"></p>
+      </article>
+    </template>
+
+    <template id="busqueda-template">
+      <div class="busqueda-page">
+        <h1>Resultados de búsqueda</h1>
+        <p class="search-query">Buscando: "<span id="query-text"></span>"</p>
+
+        <div id="search-results">
+          <div id="contenidos-results">
+            <h2>Contenidos encontrados</h2>
+            <div id="contenidos-found"></div>
+          </div>
+
+          <div id="pdas-results">
+            <h2>PDAs encontrados</h2>
+            <div id="pdas-found"></div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <template id="search-contenido-template">
+      <article class="search-result">
+        <header>
+          <h4 class="result-titulo"></h4>
+          <small class="result-meta"></small>
+        </header>
+        <footer>
+          <button class="result-btn" data-contenido-id="">Ver Detalles</button>
+        </footer>
+      </article>
+    </template>
+
+    <template id="search-pda-template">
+      <article class="search-result">
+        <header>
+          <h5 class="result-titulo"></h5>
+          <small class="result-meta"></small>
+        </header>
+        <p class="result-descripcion"></p>
+        <footer>
+          <button class="result-btn" data-contenido-id="">Ver Contenido</button>
+        </footer>
+      </article>
+    </template>
+
+    <!-- Templates para filtrado de PDAs -->
+    <template id="filtrar-template">
+      <div class="filtrar-page">
+        <h1>Filtrar PDAs - Fase <span id="filtrar-fase-numero"></span></h1>
+        <p class="filtrar-descripcion">
+          Selecciona los filtros para encontrar los Procesos de Desarrollo de
+          Aprendizaje que buscas.
+        </p>
+
+        <div class="filtros-container">
+          <div class="filtro-group">
+            <label for="filtro-campo">Campo Formativo:</label>
+            <select id="filtro-campo" aria-label="Seleccionar campo formativo">
+              <option value="">-- Selecciona un campo --</option>
+            </select>
+          </div>
+
+          <div class="filtro-group">
+            <label for="filtro-contenido">Contenido (opcional):</label>
+            <select
+              id="filtro-contenido"
+              aria-label="Seleccionar contenido"
+              disabled
+            >
+              <option value="">-- Todos los contenidos --</option>
+            </select>
+          </div>
+
+          <div class="filtro-actions">
+            <button id="aplicar-filtros" class="primary" disabled>
+              Mostrar PDAs
+            </button>
+            <button id="limpiar-filtros" class="secondary outline">
+              Limpiar Filtros
+            </button>
+          </div>
+        </div>
+
+        <div
+          id="pdas-filtrados-container"
+          class="pdas-filtrados-container hidden"
+        >
+          <h2>PDAs Encontrados (<span id="pdas-count">0</span>)</h2>
+          <div id="pdas-filtrados-list" class="pdas-filtrados-list">
+            <!-- Los PDAs filtrados se mostrarán aquí -->
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <template id="pda-filtrado-template">
+      <article class="pda-filtrado">
+        <header>
+          <div class="pda-header-info">
+            <h4>
+              PDA <span class="pda-numero-filtrado"></span> -
+              <span class="pda-grado-filtrado"></span>
+            </h4>
+            <small class="pda-contenido-info"></small>
+          </div>
+        </header>
+        <p class="pda-descripcion-filtrada"></p>
+        <footer class="pda-meta">
+          <span class="pda-campo-badge"></span>
+          <button class="ver-contenido-btn" data-contenido-id="">
+            Ver Contenido Completo
+          </button>
+        </footer>
+      </article>
+    </template>
+
+    <template id="inicio-pda-template">
+      <article class="inicio-pda-item">
+        <header>
+          <div class="inicio-pda-info">
+            <strong>PDA <span class="inicio-pda-numero"></span></strong>
+            <span class="inicio-pda-grado"></span>
+          </div>
+          <small class="inicio-pda-contenido"></small>
+        </header>
+        <p class="inicio-pda-descripcion"></p>
+        <footer>
+          <span class="inicio-pda-badge"></span>
+          <button class="inicio-ver-contenido-btn" data-contenido-id="">
+            Ver Detalles
+          </button>
+        </footer>
+      </article>
+    </template>
+
+    <script src="{{ url_for('static', filename='spa.js') }}"></script>
+  </body>
+</html>

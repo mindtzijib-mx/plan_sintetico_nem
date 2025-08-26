@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Aplicación web mínima (Flask) para explorar el Programa Sintético NEM
+Single Page Application (SPA) para el Programa Sintético NEM
 - Conecta a la base SQLite existente (programa_sintetico_nem.db)
-- Páginas: resumen, contenidos por campo, detalle de contenido (PDAs), búsqueda
+- Sirve la SPA en la ruta principal (/)
+- Proporciona API JSON endpoints para la funcionalidad AJAX
 """
 
 from __future__ import annotations
@@ -10,15 +11,15 @@ from __future__ import annotations
 import os
 import sqlite3
 from typing import Optional
-from flask import Flask, render_template, request, redirect, url_for, abort, jsonify
+from flask import Flask, render_template, request, abort, jsonify
 
 
-BASE_DIR = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'programa_sintetico_nem.db')
 
 
 def create_app() -> Flask:
-    app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), 'templates'), static_folder=os.path.join(os.path.dirname(__file__), 'static'))
+    app = Flask(__name__)
 
     def get_db() -> sqlite3.Connection:
         if not os.path.exists(DB_PATH):
@@ -38,157 +39,18 @@ def create_app() -> Flask:
         except Exception:
             return default
 
-    @app.context_processor
-    def inject_globals():
-        # Fases disponibles + fase seleccionada, disponible en todos los templates
-        conn = None
-        fases = []
-        try:
-            conn = get_db()
-            fases = conn.execute("SELECT numero, nombre FROM fases ORDER BY numero").fetchall()
-        except Exception:
-            fases = []
-        finally:
-            if conn:
-                conn.close()
-        return {
-            'fases_lista': fases,
-            'fase_actual': get_fase_num(3)
-        }
-
     @app.get('/')
     def index():
-        conn = get_db()
-        try:
-            campos = conn.execute("SELECT id, nombre FROM campos_formativos ORDER BY id").fetchall()
-        finally:
-            conn.close()
-        return render_template('index.html', campos=campos)
+        """Single Page Application - Página Principal"""
+        return render_template('spa.html')
 
-    @app.get('/resumen')
-    def resumen():
-        fase_num = get_fase_num(3)
-        conn = get_db()
-        try:
-            fase_id = get_fase_id(conn, fase_num)
-            if not fase_id:
-                abort(404, description=f"Fase {fase_num} no encontrada")
-            rows = conn.execute(
-                """
-                SELECT 
-                    cf.id as campo_id,
-                    cf.nombre as campo_nombre,
-                    COUNT(DISTINCT c.id) as num_contenidos,
-                    COUNT(p.id) as num_pdas
-                FROM campos_formativos cf
-                LEFT JOIN contenidos c 
-                    ON cf.id = c.campo_formativo_id AND c.fase_id = ?
-                LEFT JOIN pdas p 
-                    ON c.id = p.contenido_id
-                GROUP BY cf.id, cf.nombre
-                ORDER BY cf.id
-                """,
-                (fase_id,)
-            ).fetchall()
-        finally:
-            conn.close()
-        return render_template('resumen.html', fase=fase_num, datos=rows)
-
-    @app.get('/contenidos')
-    def contenidos_por_campo():
-        fase_num = get_fase_num(3)
-        campo_id = request.args.get('campo_id')
-        if not campo_id:
-            return redirect(url_for('index'))
-
-        conn = get_db()
-        try:
-            fase_id = get_fase_id(conn, fase_num)
-            campo = conn.execute("SELECT id, nombre FROM campos_formativos WHERE id = ?", (campo_id,)).fetchone()
-            if not campo:
-                abort(404, description="Campo formativo no encontrado")
-            contenidos = conn.execute(
-                """
-                SELECT id, numero, titulo
-                FROM contenidos
-                WHERE campo_formativo_id = ? AND fase_id = ?
-                ORDER BY numero
-                """,
-                (campo_id, fase_id)
-            ).fetchall()
-        finally:
-            conn.close()
-        return render_template('contenidos.html', fase=fase_num, campo=campo, contenidos=contenidos)
-
-    @app.get('/contenido/<int:contenido_id>')
-    def detalle_contenido(contenido_id: int):
-        conn = get_db()
-        try:
-            contenido = conn.execute(
-                """
-                SELECT c.id, c.numero, c.titulo, f.numero as fase_num, cf.nombre as campo_nombre
-                FROM contenidos c
-                JOIN fases f ON c.fase_id = f.id
-                JOIN campos_formativos cf ON c.campo_formativo_id = cf.id
-                WHERE c.id = ?
-                """,
-                (contenido_id,)
-            ).fetchone()
-            if not contenido:
-                abort(404, description="Contenido no encontrado")
-
-            pdas = conn.execute(
-                """
-                SELECT g.nombre as grado, p.numero_pda, p.descripcion
-                FROM pdas p
-                JOIN grados g ON p.grado_id = g.id
-                WHERE p.contenido_id = ?
-                ORDER BY g.numero, p.numero_pda
-                """,
-                (contenido_id,)
-            ).fetchall()
-        finally:
-            conn.close()
-        return render_template('contenido_detalle.html', contenido=contenido, pdas=pdas)
-
-    @app.get('/buscar')
-    def buscar():
-        fase_num = get_fase_num(3)
-        q = (request.args.get('q') or '').strip()
-        contenidos = []
-        pdas = []
-        if q:
-            conn = get_db()
-            try:
-                fase_id = get_fase_id(conn, fase_num)
-                contenidos = conn.execute(
-                    """
-                    SELECT c.id, cf.nombre as campo, c.numero, c.titulo
-                    FROM contenidos c
-                    JOIN campos_formativos cf ON c.campo_formativo_id = cf.id
-                    WHERE c.titulo LIKE ? AND c.fase_id = ?
-                    ORDER BY cf.nombre, c.numero
-                    """,
-                    (f"%{q}%", fase_id)
-                ).fetchall()
-                pdas = conn.execute(
-                    """
-                    SELECT c.id as contenido_id, cf.nombre as campo, c.titulo, g.nombre as grado, p.numero_pda, p.descripcion
-                    FROM pdas p
-                    JOIN contenidos c ON p.contenido_id = c.id
-                    JOIN campos_formativos cf ON c.campo_formativo_id = cf.id
-                    JOIN grados g ON p.grado_id = g.id
-                    WHERE p.descripcion LIKE ? AND c.fase_id = ?
-                    ORDER BY cf.nombre, c.numero, g.numero, p.numero_pda
-                    """,
-                    (f"%{q}%", fase_id)
-                ).fetchall()
-            finally:
-                conn.close()
-        return render_template('buscar.html', fase=fase_num, q=q, contenidos=contenidos, pdas=pdas)
+    @app.get('/spa')
+    def spa():
+        """Single Page Application - Ruta alternativa"""
+        return render_template('spa.html')
 
     # ------------------------
-    # API JSON pública (mínima)
+    # API JSON pública (para la SPA)
     # ------------------------
     @app.get('/api/fases')
     def api_fases():
@@ -324,6 +186,73 @@ def create_app() -> Flask:
                     for p in pdas
                 ]
             })
+        finally:
+            conn.close()
+
+    @app.get('/api/pdas/filtrados')
+    def api_pdas_filtrados():
+        """Endpoint para obtener PDAs filtrados por fase, campo y opcionalmente contenido"""
+        fase_num = get_fase_num(3)
+        campo_id = request.args.get('campo_id', type=int)
+        contenido_id = request.args.get('contenido_id', type=int)  # Opcional
+        
+        if not campo_id:
+            return jsonify({'error': 'campo_id requerido'}), 400
+            
+        conn = get_db()
+        try:
+            fase_id = get_fase_id(conn, fase_num)
+            if not fase_id:
+                return jsonify({'error': 'fase no encontrada'}), 404
+                
+            # Query base
+            query = """
+                SELECT 
+                    p.id as pda_id,
+                    p.numero_pda,
+                    p.descripcion as pda_descripcion,
+                    c.id as contenido_id,
+                    c.numero as contenido_numero,
+                    c.titulo as contenido_titulo,
+                    cf.nombre as campo_nombre,
+                    g.nombre as grado,
+                    g.numero as grado_numero,
+                    f.numero as fase_numero
+                FROM pdas p
+                JOIN contenidos c ON p.contenido_id = c.id
+                JOIN campos_formativos cf ON c.campo_formativo_id = cf.id
+                JOIN grados g ON p.grado_id = g.id
+                JOIN fases f ON c.fase_id = f.id
+                WHERE c.campo_formativo_id = ? AND c.fase_id = ?
+            """
+            params = [campo_id, fase_id]
+            
+            # Si se especifica un contenido específico
+            if contenido_id:
+                query += " AND c.id = ?"
+                params.append(contenido_id)
+                
+            query += " ORDER BY c.numero, g.numero, p.numero_pda"
+            
+            pdas = conn.execute(query, params).fetchall()
+            
+            return jsonify([
+                {
+                    'pda_id': p['pda_id'],
+                    'numero_pda': p['numero_pda'],
+                    'descripcion': p['pda_descripcion'],
+                    'contenido': {
+                        'id': p['contenido_id'],
+                        'numero': p['contenido_numero'],
+                        'titulo': p['contenido_titulo']
+                    },
+                    'campo': p['campo_nombre'],
+                    'grado': p['grado'],
+                    'grado_numero': p['grado_numero'],
+                    'fase': p['fase_numero']
+                }
+                for p in pdas
+            ])
         finally:
             conn.close()
 
