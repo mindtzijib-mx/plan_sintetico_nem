@@ -1,0 +1,14 @@
+{% extends 'base.html' %} {% block content %}
+<h2>{{ campo['nombre'] }} — Fase {{ fase }}</h2>
+<p>{{ contenidos|length }} contenidos.</p>
+
+<ul>
+  {% for c in contenidos %}
+  <li>
+    <a href="{{ url_for('detalle_contenido', contenido_id=c['id']) }}"
+      >{{ c['numero'] }}. {{ c['titulo'] }}</a
+    >
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}
